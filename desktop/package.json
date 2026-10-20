@@ -140,6 +140,10 @@
       "artifactName": "ColdCoffee-Workbench-macOS-${arch}-${version}.${ext}",
       "hardenedRuntime": false
     },
+    "deb": {
+      "afterInstall": "build/linux/after-install.sh",
+      "afterRemove": "build/linux/after-remove.sh"
+    },
     "linux": {
       "icon": "assets/icon-v4.png",
       "executableName": "coldbrew-zero",

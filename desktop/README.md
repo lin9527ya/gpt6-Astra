@@ -13,6 +13,8 @@ npm start
 
 Linux 上如果本机内核的 seccomp 过滤层会让 Chromium 渲染进程崩溃（窗口全黑），启动时会先探测一次，只在探测失败时关掉 seccomp 这一层并自动重启：命名空间沙箱、`contextIsolation` 与页面 CSP 都保持不变。探测正常时不做任何改动，Windows / macOS 完全不探测。
 
+以 root 运行：Chromium 不允许 root 带沙箱启动（`FATAL: Running as root without --no-sandbox is not supported`），而这个开关只能在进程启动前给出，JS 层够不到。所以 deb 装完会生成一个 root 感知启动器，`/usr/bin/coldbrew-zero` 与桌面项都指向它：`uid=0` 时自动补 `--no-sandbox`，普通用户走原路径、沙箱保持开启。AppImage 沿用 electron-builder 默认的 `--no-sandbox` 桌面项。从普通用户会话里 `sudo` 起图形界面还有第二道墙是 X 授权，需要先 `xhost +SI:localuser:root`。桌面程序以 root 运行会把配置写成 root 所有，能不用就不用。
+
 打包 Windows 便携版：
 
 ```powershell
