@@ -11,6 +11,8 @@ npm install
 npm start
 ```
 
+Linux 上如果本机内核的 seccomp 过滤层会让 Chromium 渲染进程崩溃（窗口全黑），启动时会先探测一次，只在探测失败时关掉 seccomp 这一层并自动重启：命名空间沙箱、`contextIsolation` 与页面 CSP 都保持不变。探测正常时不做任何改动，Windows / macOS 完全不探测。
+
 打包 Windows 便携版：
 
 ```powershell

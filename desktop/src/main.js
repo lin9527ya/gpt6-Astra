@@ -45,6 +45,47 @@ const COMMUNITY = {
 let splashWindow;
 let mainWindow;
 
+// Chromium's seccomp-BPF layer is unusable on some recent Linux kernels (Kali
+// 6.19 among them): its SIGSYS handler faults while servicing the
+// getsockname() probes the sandbox itself makes, so every renderer process
+// dies on start and the window stays black. Probe the sandbox once and, when
+// it is broken, relaunch with only that layer disabled -- the namespace
+// sandbox, contextIsolation and the page CSP all stay in place.
+const SANDBOX_FALLBACK_FLAG = "--disable-seccomp-filter-sandbox";
+
+function rendererSandboxWorks() {
+  return new Promise((resolve) => {
+    const probe = new BrowserWindow({
+      show: false,
+      width: 1,
+      height: 1,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    let settled = false;
+    const finish = (works) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!probe.isDestroyed()) probe.destroy();
+      resolve(works);
+    };
+    const timer = setTimeout(() => finish(false), 5000);
+    probe.webContents.once("render-process-gone", () => finish(false));
+    probe.webContents.once("did-finish-load", () => finish(true));
+    probe.loadURL("data:text/html,<title>sandbox-probe</title>");
+  });
+}
+
+async function ensureUsableRendererSandbox() {
+  if (process.platform !== "linux") return true;
+  if (process.argv.includes(SANDBOX_FALLBACK_FLAG)) return true;
+  if (await rendererSandboxWorks()) return true;
+  console.warn("冷咖啡：本机内核上渲染进程沙箱不可用，关闭 seccomp 过滤层后重新启动。");
+  app.relaunch({ args: process.argv.slice(1).concat(SANDBOX_FALLBACK_FLAG) });
+  app.exit(0);
+  return false;
+}
+
 function emitWorkflow(event) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("coldbrew:workflow-event", event);
@@ -353,13 +394,19 @@ handleTrusted("window:maximize", () => {
 });
 handleTrusted("window:close", () => mainWindow?.close());
 
-app.whenReady().then(() => {
+function startApp() {
   createSplash();
   createMain();
   setTimeout(() => {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
     if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
   }, 1800);
+}
+
+app.whenReady().then(() => {
+  // Only Linux pays for the sandbox probe; every other platform starts here.
+  if (process.platform !== "linux") return startApp();
+  return ensureUsableRendererSandbox().then((usable) => { if (usable) startApp(); });
 });
 
 app.on("window-all-closed", () => app.quit());
